@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Squircle Aimbot Pop Game</title>
+    <title>Squircle Aimbot Pop Game - Extended</title>
     <style>
       /* Global Styles */
       body {
@@ -25,10 +25,9 @@
         border-radius: 30%;
         transition: background-color 0.5s ease, transform 0.2s ease,
           opacity 0.2s ease;
-        /* A smooth transition when its color or transform changes */
       }
-      /* Highlighter element: outlines the currently selected squircle */
-      #highlighter {
+      /* Highlighter Styles */
+      .highlighter {
         position: absolute;
         border: 3px solid yellow;
         border-radius: 30%;
@@ -36,7 +35,7 @@
         transition: left 0.1s ease, top 0.1s ease, width 0.1s ease,
           height 0.1s ease;
       }
-      /* Explosion letters for pop effect */
+      /* Explosion Letters for Pop Effect */
       .letter {
         position: absolute;
         font-weight: bold;
@@ -54,7 +53,7 @@
           transform: translate(var(--dx), var(--dy)) rotate(360deg);
         }
       }
-      /* Vertical slider styling */
+      /* Vertical Slider Styling */
       #sliderContainer {
         position: absolute;
         top: 50%;
@@ -64,7 +63,7 @@
       }
       #colorSlider {
         -webkit-appearance: none;
-        width: 200px; /* Length of the slider after rotation */
+        width: 200px; /* length after rotation */
         transform: rotate(90deg);
         background: transparent;
       }
@@ -83,8 +82,8 @@
   </head>
   <body>
     <div id="gameArea"></div>
-    <!-- Highlighter element that follows the virtual cursor -->
-    <div id="highlighter" style="display: none"></div>
+    <!-- Container for dynamically created highlighters -->
+    <div id="highlighterContainer"></div>
     <div id="sliderContainer">
       <input type="range" id="colorSlider" min="0" max="360" value="200" />
     </div>
@@ -95,16 +94,24 @@
     ></audio>
     <script>
       // Global configuration variables
-      let currentHue = 200; // initial hue from the slider
+      let currentHue = 200; // initial hue from slider
       const minSize = 40;
       const maxSize = 100;
-      const gridSpacing = 80; // Denser grid spacing for more squircles
+      const gridSpacing = 80; // dense grid spacing
       const gameArea = document.getElementById("gameArea");
       const popSound = document.getElementById("popSound");
       popSound.volume = 0.5;
 
-      const highlighter = document.getElementById("highlighter");
-      let currentHighlighted = null;
+      // For handling multi-target highlighting
+      let highlightCount = 1; // starts with one target
+      const maxHighlightCount = 10;
+      let highlighters = []; // array to hold highlighter elements
+      let currentHighlighted = []; // array of currently highlighted squircles
+
+      // For continuous popping on mouse hold
+      let popInterval = null;
+      let lastMouseX = 0,
+        lastMouseY = 0;
 
       // Utility: random number between min and max
       function random(min, max) {
@@ -114,7 +121,7 @@
       // Compute lightness based on squircle size (larger = darker)
       function computeLightness(size) {
         const norm = (size - minSize) / (maxSize - minSize);
-        return 90 - norm * 40; // lightness ranges from 90% to 50%
+        return 90 - norm * 40; // lightness from 90% down to 50%
       }
 
       // Create a squircle element at (x, y) with a given size
@@ -123,11 +130,10 @@
         squircle.className = "squircle";
         squircle.style.width = size + "px";
         squircle.style.height = size + "px";
-        // Center the squircle at the provided (x, y)
+        // Center the squircle at (x, y)
         squircle.style.left = x - size / 2 + "px";
         squircle.style.top = y - size / 2 + "px";
         squircle.dataset.size = size;
-        // Set accent color based on currentHue and size (larger squircles darker)
         const lightness = computeLightness(size);
         squircle.style.backgroundColor = `hsl(${currentHue}, 80%, ${lightness}%)`;
         gameArea.appendChild(squircle);
@@ -135,16 +141,17 @@
 
       // Build a massive grid of squircles filling the viewport
       function createGrid() {
-        // Clear previous squircles if any
+        // Clear previous squircles
         gameArea.innerHTML = "";
-        // Re-add the highlighter element (always on top)
-        gameArea.appendChild(highlighter);
-        // Calculate columns and rows based on gridSpacing
+        // Ensure highlighter container remains on top
+        const highlighterContainer = document.getElementById(
+          "highlighterContainer"
+        );
+        gameArea.appendChild(highlighterContainer);
         const cols = Math.floor(window.innerWidth / gridSpacing) + 1;
         const rows = Math.floor(window.innerHeight / gridSpacing) + 1;
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
-            // Center positions for each grid cell
             const centerX = gridSpacing / 2 + col * gridSpacing;
             const centerY = gridSpacing / 2 + row * gridSpacing;
             const size = Math.floor(random(minSize, maxSize));
@@ -153,48 +160,40 @@
         }
       }
 
-      // When a squircle is popped, play sound and create explosion letters
+      // Pop a squircle (if not already popped)
       function popSquircle(squircle) {
         if (!squircle.classList.contains("popped")) {
           squircle.classList.add("popped");
-          // Get the squircle's bounding rectangle and center coordinates
           const rect = squircle.getBoundingClientRect();
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
           const size = parseInt(squircle.dataset.size, 10);
-          // Play pop sound
           popSound.currentTime = 0;
           popSound.play();
-          // Create explosion letters (P, O, P) at the squircle's center
           createExplosionText(centerX, centerY, size);
-          // Animate the squircle: scale up and fade out
           squircle.style.transform = "scale(1.5)";
           squircle.style.opacity = 0;
-          // Remove the squircle after the animation finishes
           setTimeout(() => {
-            squircle.remove();
+            if (squircle.parentElement) squircle.remove();
           }, 200);
         }
       }
 
-      // Create explosion letters that burst outward with rotation
+      // Create explosion letters ("P", "O", "P") that burst outward with rotation
       function createExplosionText(x, y, size) {
         const letters = [
           { char: "P", angle: -90 },
-          { char: "O", angle: -90 + 120 },
-          { char: "P", angle: -90 + 240 },
+          { char: "O", angle: 30 },
+          { char: "P", angle: 150 },
         ];
         letters.forEach((letterData) => {
           const letterElem = document.createElement("span");
           letterElem.className = "letter";
           letterElem.textContent = letterData.char;
-          // Set font size relative to the squircle size
           const fontSize = Math.floor(size * 0.5);
           letterElem.style.fontSize = fontSize + "px";
-          // Position the letter centered at the explosion origin
           letterElem.style.left = x - fontSize / 2 + "px";
           letterElem.style.top = y - fontSize / 2 + "px";
-          // Determine explosion distance (random between 50 and 100px)
           const distance = random(50, 100);
           const rad = letterData.angle * (Math.PI / 180);
           const dx = Math.cos(rad) * distance;
@@ -218,52 +217,113 @@
         });
       }
 
-      // Find the squircle closest to the given (x, y) and update the highlighter
-      function updateHighlighter(x, y) {
-        const squircles = document.querySelectorAll(".squircle");
-        if (!squircles.length) {
-          highlighter.style.display = "none";
-          currentHighlighted = null;
-          return;
-        }
-        let closest = null;
-        let minDist = Infinity;
-        squircles.forEach((s) => {
-          const rect = s.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          const dx = centerX - x;
-          const dy = centerY - y;
-          const dist = dx * dx + dy * dy;
-          if (dist < minDist) {
-            minDist = dist;
-            closest = s;
-          }
+      // Update the set of currently highlighted squircles (closest to the mouse)
+      function updateHighlights(x, y) {
+        lastMouseX = x;
+        lastMouseY = y;
+        const squircles = Array.from(document.querySelectorAll(".squircle"));
+        // Sort squircles by distance squared from (x,y)
+        const sorted = squircles.sort((a, b) => {
+          const rectA = a.getBoundingClientRect();
+          const rectB = b.getBoundingClientRect();
+          const ax = rectA.left + rectA.width / 2,
+            ay = rectA.top + rectA.height / 2;
+          const bx = rectB.left + rectB.width / 2,
+            by = rectB.top + rectB.height / 2;
+          return (
+            (ax - x) ** 2 + (ay - y) ** 2 - ((bx - x) ** 2 + (by - y) ** 2)
+          );
         });
-        if (closest) {
-          currentHighlighted = closest;
-          const rect = closest.getBoundingClientRect();
-          // Position the highlighter exactly over the squircle
-          highlighter.style.left = rect.left + "px";
-          highlighter.style.top = rect.top + "px";
-          highlighter.style.width = rect.width + "px";
-          highlighter.style.height = rect.height + "px";
-          highlighter.style.borderRadius = closest.style.borderRadius;
-          highlighter.style.display = "block";
+        // Choose the top N as defined by highlightCount
+        currentHighlighted = sorted.slice(0, highlightCount);
+        updateHighlighterElements();
+      }
+
+      // Create or update the highlighter elements to match currentHighlighted squircles
+      function updateHighlighterElements() {
+        // Ensure there are enough highlighter elements
+        const container = document.getElementById("highlighterContainer");
+        while (highlighters.length < currentHighlighted.length) {
+          const hl = document.createElement("div");
+          hl.className = "highlighter";
+          highlighters.push(hl);
+          container.appendChild(hl);
+        }
+        // If we have extra highlighters, remove them
+        while (highlighters.length > currentHighlighted.length) {
+          const hl = highlighters.pop();
+          if (hl.parentElement) hl.remove();
+        }
+        // Position each highlighter over its corresponding squircle
+        currentHighlighted.forEach((sq, index) => {
+          const rect = sq.getBoundingClientRect();
+          const hl = highlighters[index];
+          hl.style.left = rect.left + "px";
+          hl.style.top = rect.top + "px";
+          hl.style.width = rect.width + "px";
+          hl.style.height = rect.height + "px";
+          hl.style.borderRadius = sq.style.borderRadius;
+        });
+      }
+
+      // Handle continuous popping when mouse button is held down
+      function startContinuousPop() {
+        if (popInterval === null) {
+          popInterval = setInterval(() => {
+            currentHighlighted.forEach((sq) => popSquircle(sq));
+            // After popping, update highlights (some squircles may have been removed)
+            updateHighlights(lastMouseX, lastMouseY);
+          }, 150);
         }
       }
 
-      // Global mousemove to update the highlighter's target
+      function stopContinuousPop() {
+        if (popInterval !== null) {
+          clearInterval(popInterval);
+          popInterval = null;
+        }
+      }
+
+      // Global mouse move updates highlighted squircles
       document.addEventListener("mousemove", (e) => {
-        updateHighlighter(e.clientX, e.clientY);
+        updateHighlights(e.clientX, e.clientY);
       });
 
-      // Global click: pop the squircle currently highlighted, if any
+      // Global mouse down starts continuous pop
+      document.addEventListener("mousedown", (e) => {
+        startContinuousPop();
+      });
+
+      // Global mouse up stops continuous pop
+      document.addEventListener("mouseup", (e) => {
+        stopContinuousPop();
+      });
+
+      // Global click (if not holding down) pops highlighted squircles once
       document.addEventListener("click", (e) => {
-        if (currentHighlighted) {
-          popSquircle(currentHighlighted);
+        // Only trigger if not already handled by mousedown continuous pop
+        if (!popInterval) {
+          currentHighlighted.forEach((sq) => popSquircle(sq));
         }
       });
+
+      // Use the scroll wheel to adjust highlight count
+      document.addEventListener(
+        "wheel",
+        (e) => {
+          // Prevent page scrolling
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            // Scrolling up: increase targets
+            highlightCount = Math.min(maxHighlightCount, highlightCount + 1);
+          } else {
+            // Scrolling down: decrease targets (min 1)
+            highlightCount = Math.max(1, highlightCount - 1);
+          }
+          updateHighlights(lastMouseX, lastMouseY);
+        },
+        { passive: false }
+      );
 
       // Set up the color slider event to change hue
       const colorSlider = document.getElementById("colorSlider");
@@ -272,7 +332,7 @@
         updateSquircleColors();
       });
 
-      // Rebuild the grid on window resize
+      // Rebuild grid on window resize
       window.addEventListener("resize", createGrid);
 
       // Initial grid creation
