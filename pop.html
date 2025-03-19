@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Enhanced Pop Game</title>
+    <title>Ultimate Pop Game</title>
     <style>
-      /* Base styles */
+      /* Basic Page Styles */
       body {
         margin: 0;
         overflow: hidden;
@@ -13,28 +13,27 @@
         font-family: sans-serif;
         user-select: none;
       }
-      /* Game area fills the viewport */
       #gameArea {
         position: relative;
         width: 100vw;
         height: 100vh;
       }
-      /* Bubble style with transitions */
+      /* Balloon Styles */
       .bubble {
         position: absolute;
         border-radius: 50%;
         background: rgba(255, 255, 255, 0.8);
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         transform: scale(0);
-        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        transition: transform 0.2s ease-out, opacity 0.2s ease-out;
         cursor: pointer;
       }
-      /* Scale and fade when popping */
+      /* Popping animation for the balloon */
       .bubble.pop {
         transform: scale(1.5);
         opacity: 0;
       }
-      /* Particle style for pop effect */
+      /* Particle for pop effect */
       .particle {
         position: absolute;
         width: 6px;
@@ -54,11 +53,34 @@
           transform: translate(var(--dx), var(--dy));
         }
       }
+      /* Popup text style */
+      .popup {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        text-align: center;
+        line-height: 1;
+        font-weight: bold;
+        pointer-events: none;
+        opacity: 1;
+        transform: translateY(0);
+        animation: popupText 1s forwards ease-out;
+      }
+      @keyframes popupText {
+        0% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-50px);
+        }
+      }
     </style>
   </head>
   <body>
     <div id="gameArea"></div>
-    <!-- Audio element for the pop sound -->
+    <!-- Audio for the pop sound effect -->
     <audio
       id="popSound"
       src="https://freesound.org/data/previews/341/341695_3248244-lq.mp3"
@@ -68,108 +90,118 @@
       const popSound = document.getElementById("popSound");
       popSound.volume = 0.5;
 
-      // Utility function to get a random number in a range
+      // Utility: random number between min and max
       function random(min, max) {
         return Math.random() * (max - min) + min;
       }
 
-      // Create a bubble at (x, y) with a random size
+      // Create a balloon at (x,y) with random size
       function createBubble(x, y) {
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        const size = random(30, 80); // Random size between 30px and 80px
+        const size = random(30, 80); // Balloon size between 30px and 80px
         bubble.style.width = size + "px";
         bubble.style.height = size + "px";
-        // Adjust position so the bubble is centered at (x, y)
+        // Center the balloon at the given coordinates
         bubble.style.left = x - size / 2 + "px";
         bubble.style.top = y - size / 2 + "px";
         gameArea.appendChild(bubble);
 
-        // Trigger the CSS scale transition
+        // Trigger the scale animation on next frame
         requestAnimationFrame(() => {
           bubble.style.transform = "scale(1)";
         });
 
-        // Auto pop the bubble after 2 seconds
-        const autoPop = setTimeout(() => {
-          popBubble(bubble);
-        }, 2000);
-
-        // On click, pop the bubble and prevent the event from bubbling
+        // Only allow popping on click
         bubble.addEventListener("click", (e) => {
           e.stopPropagation();
-          clearTimeout(autoPop);
           popBubble(bubble);
         });
       }
 
-      // Create multiple particles to simulate an explosion effect
-      function createParticles(x, y, count = 8) {
+      // Create particles for the explosion effect
+      function createParticles(x, y, count = 10) {
         for (let i = 0; i < count; i++) {
           const particle = document.createElement("div");
           particle.className = "particle";
-          // Place the particle at the center where the bubble popped
           particle.style.left = x - 3 + "px";
           particle.style.top = y - 3 + "px";
-          // Determine a random angle and distance for the particle's travel
           const angle = random(0, 2 * Math.PI);
           const distance = random(30, 80);
           const dx = Math.cos(angle) * distance + "px";
           const dy = Math.sin(angle) * distance + "px";
-          // Set custom properties for the animation's translation
           particle.style.setProperty("--dx", dx);
           particle.style.setProperty("--dy", dy);
           gameArea.appendChild(particle);
-          // Remove the particle once the animation ends
           particle.addEventListener("animationend", () => {
             particle.remove();
           });
         }
       }
 
-      // Handle bubble pop: animate bubble and spawn particles
+      // Create and animate popup text above the popped balloon
+      function showPopupText(x, y, size) {
+        const popup = document.createElement("div");
+        popup.className = "popup";
+        // Text size relative to balloon size
+        const fontSize = Math.floor(size * 0.4);
+        popup.style.fontSize = fontSize + "px";
+        // Set dimensions so that it’s circular
+        const diameter = fontSize * 2;
+        popup.style.width = diameter + "px";
+        popup.style.height = diameter + "px";
+        popup.style.lineHeight = diameter + "px";
+        popup.textContent = "POP!";
+        // Center popup above the balloon
+        popup.style.left = x - diameter / 2 + "px";
+        popup.style.top = y - diameter - 10 + "px";
+        gameArea.appendChild(popup);
+        popup.addEventListener("animationend", () => {
+          popup.remove();
+        });
+      }
+
+      // Handle popping a balloon
       function popBubble(bubble) {
         if (!bubble.classList.contains("pop")) {
-          // Get bubble center for particle effect
           const rect = bubble.getBoundingClientRect();
-          const bubbleCenterX = rect.left + rect.width / 2;
-          const bubbleCenterY = rect.top + rect.height / 2;
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          const size = rect.width;
 
           bubble.classList.add("pop");
           popSound.currentTime = 0;
           popSound.play();
-          createParticles(
-            bubbleCenterX,
-            bubbleCenterY,
-            Math.floor(random(8, 14))
-          );
-          // Remove bubble after transition
+          createParticles(centerX, centerY, Math.floor(random(8, 14)));
+          showPopupText(centerX, rect.top, size);
           setTimeout(() => {
             bubble.remove();
-          }, 300);
+          }, 200);
         }
       }
 
-      // When the user clicks, spawn several bubbles around the click position
-      gameArea.addEventListener("click", (e) => {
-        const count = Math.floor(random(3, 6)); // Spawn 3 to 5 bubbles
-        for (let i = 0; i < count; i++) {
-          // Slightly randomize position for each bubble
-          const offsetX = random(-40, 40);
-          const offsetY = random(-40, 40);
-          createBubble(e.clientX + offsetX, e.clientY + offsetY);
-        }
-      });
+      // Spawning configuration
+      const spawnInterval = 300; // spawn every 300ms
+      const bubblesPerInterval = 5; // spawn 5 balloons per interval
+      const maxBubbles = 100; // when 100 balloons are on screen, stop spawning
 
-      // Auto-generate bubbles at a faster rate and in clusters
-      setInterval(() => {
-        const count = Math.floor(random(2, 5)); // 2 to 4 bubbles per interval
-        for (let i = 0; i < count; i++) {
+      // Start spawning balloons automatically
+      const spawner = setInterval(() => {
+        // Only spawn if there are fewer than maxBubbles on screen
+        const currentBubbles = gameArea.querySelectorAll(".bubble").length;
+        if (currentBubbles >= maxBubbles) {
+          clearInterval(spawner);
+          return;
+        }
+        for (let i = 0; i < bubblesPerInterval; i++) {
+          // Random position anywhere on screen
           const x = random(0, window.innerWidth);
           const y = random(0, window.innerHeight);
           createBubble(x, y);
         }
-      }, 800);
+      }, spawnInterval);
+
+      // Note: Clicking on empty space does nothing in this version.
     </script>
   </body>
 </html>
