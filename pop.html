@@ -3,205 +3,225 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ultimate Pop Game</title>
+    <title>Squircle Pop Game</title>
     <style>
-      /* Basic Page Styles */
+      /* Global Styles */
       body {
         margin: 0;
         overflow: hidden;
         background: linear-gradient(135deg, #ff9a9e, #fad0c4);
         font-family: sans-serif;
         user-select: none;
+        position: relative;
       }
       #gameArea {
         position: relative;
         width: 100vw;
         height: 100vh;
       }
-      /* Balloon Styles */
-      .bubble {
+      /* Squircle Styles */
+      .squircle {
         position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.8);
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-        transform: scale(0);
-        transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+        /* Using a lower border-radius than 50% gives a squircle-like look */
+        border-radius: 30%;
+        transition: background-color 0.5s ease, transform 0.2s ease;
         cursor: pointer;
       }
-      /* Popping animation for the balloon */
-      .bubble.pop {
-        transform: scale(1.5);
-        opacity: 0;
-      }
-      /* Particle for pop effect */
-      .particle {
+      /* Letter explosion animation */
+      .letter {
         position: absolute;
-        width: 6px;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 50%;
+        font-weight: bold;
+        color: #333;
         pointer-events: none;
-        animation: popParticle 0.6s ease-out forwards;
+        animation: explodeLetter 1s forwards ease-out;
       }
-      @keyframes popParticle {
+      @keyframes explodeLetter {
         from {
           opacity: 1;
-          transform: translate(0, 0);
+          transform: translate(0, 0) rotate(0deg);
         }
         to {
           opacity: 0;
-          transform: translate(var(--dx), var(--dy));
+          /* Uses custom properties set inline for dx and dy */
+          transform: translate(var(--dx), var(--dy)) rotate(360deg);
         }
       }
-      /* Popup text style */
-      .popup {
+      /* Slider Styles */
+      #sliderContainer {
         position: absolute;
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 50%;
-        text-align: center;
-        line-height: 1;
-        font-weight: bold;
-        pointer-events: none;
-        opacity: 1;
-        transform: translateY(0);
-        animation: popupText 1s forwards ease-out;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        z-index: 1000;
       }
-      @keyframes popupText {
-        0% {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        100% {
-          opacity: 0;
-          transform: translateY(-50px);
-        }
+      #colorSlider {
+        -webkit-appearance: none;
+        width: 200px; /* This width becomes the slider’s length after rotation */
+        transform: rotate(90deg);
+        background: transparent;
+      }
+      #colorSlider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 20px;
+        width: 20px;
+        background: #333;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+      #colorSlider:focus {
+        outline: none;
       }
     </style>
   </head>
   <body>
     <div id="gameArea"></div>
-    <!-- Audio for the pop sound effect -->
+    <div id="sliderContainer">
+      <input type="range" id="colorSlider" min="0" max="360" value="200" />
+    </div>
+    <!-- Pop sound effect -->
     <audio
       id="popSound"
       src="https://freesound.org/data/previews/341/341695_3248244-lq.mp3"
     ></audio>
     <script>
+      // Global configuration
+      let currentHue = 200; // initial hue from the slider
+      const minSize = 50;
+      const maxSize = 100;
+      const gridSpacing = 120; // spacing between centers in the grid
       const gameArea = document.getElementById("gameArea");
       const popSound = document.getElementById("popSound");
       popSound.volume = 0.5;
 
-      // Utility: random number between min and max
-      function random(min, max) {
-        return Math.random() * (max - min) + min;
-      }
-
-      // Create a balloon at (x,y) with random size
-      function createBubble(x, y) {
-        const bubble = document.createElement("div");
-        bubble.className = "bubble";
-        const size = random(30, 80); // Balloon size between 30px and 80px
-        bubble.style.width = size + "px";
-        bubble.style.height = size + "px";
-        // Center the balloon at the given coordinates
-        bubble.style.left = x - size / 2 + "px";
-        bubble.style.top = y - size / 2 + "px";
-        gameArea.appendChild(bubble);
-
-        // Trigger the scale animation on next frame
-        requestAnimationFrame(() => {
-          bubble.style.transform = "scale(1)";
-        });
-
-        // Only allow popping on click
-        bubble.addEventListener("click", (e) => {
-          e.stopPropagation();
-          popBubble(bubble);
-        });
-      }
-
-      // Create particles for the explosion effect
-      function createParticles(x, y, count = 10) {
-        for (let i = 0; i < count; i++) {
-          const particle = document.createElement("div");
-          particle.className = "particle";
-          particle.style.left = x - 3 + "px";
-          particle.style.top = y - 3 + "px";
-          const angle = random(0, 2 * Math.PI);
-          const distance = random(30, 80);
-          const dx = Math.cos(angle) * distance + "px";
-          const dy = Math.sin(angle) * distance + "px";
-          particle.style.setProperty("--dx", dx);
-          particle.style.setProperty("--dy", dy);
-          gameArea.appendChild(particle);
-          particle.addEventListener("animationend", () => {
-            particle.remove();
-          });
+      // Create grid of squircles
+      function createGrid() {
+        // Clear any existing squircles
+        gameArea.innerHTML = "";
+        // Calculate columns and rows based on viewport size
+        const cols = Math.floor(window.innerWidth / gridSpacing);
+        const rows = Math.floor(window.innerHeight / gridSpacing);
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            // Center positions for each grid cell
+            const centerX = gridSpacing / 2 + col * gridSpacing;
+            const centerY = gridSpacing / 2 + row * gridSpacing;
+            // Give each squircle a random size within our limits
+            const size =
+              Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+            createSquircle(centerX, centerY, size);
+          }
         }
       }
 
-      // Create and animate popup text above the popped balloon
-      function showPopupText(x, y, size) {
-        const popup = document.createElement("div");
-        popup.className = "popup";
-        // Text size relative to balloon size
-        const fontSize = Math.floor(size * 0.4);
-        popup.style.fontSize = fontSize + "px";
-        // Set dimensions so that it’s circular
-        const diameter = fontSize * 2;
-        popup.style.width = diameter + "px";
-        popup.style.height = diameter + "px";
-        popup.style.lineHeight = diameter + "px";
-        popup.textContent = "POP!";
-        // Center popup above the balloon
-        popup.style.left = x - diameter / 2 + "px";
-        popup.style.top = y - diameter - 10 + "px";
-        gameArea.appendChild(popup);
-        popup.addEventListener("animationend", () => {
-          popup.remove();
-        });
+      // Utility: compute lightness based on size (larger = darker)
+      function computeLightness(size) {
+        const norm = (size - minSize) / (maxSize - minSize);
+        return 90 - norm * 40; // lightness from 90% down to 50%
       }
 
-      // Handle popping a balloon
-      function popBubble(bubble) {
-        if (!bubble.classList.contains("pop")) {
-          const rect = bubble.getBoundingClientRect();
+      // Create a squircle element at (x, y) with given size
+      function createSquircle(x, y, size) {
+        const squircle = document.createElement("div");
+        squircle.className = "squircle";
+        squircle.style.width = size + "px";
+        squircle.style.height = size + "px";
+        // Position so that the center of the squircle is at (x, y)
+        squircle.style.left = x - size / 2 + "px";
+        squircle.style.top = y - size / 2 + "px";
+        // Save size in dataset for later use
+        squircle.dataset.size = size;
+        // Compute accent color based on current hue and size (darker if larger)
+        const lightness = computeLightness(size);
+        squircle.style.backgroundColor = `hsl(${currentHue}, 80%, ${lightness}%)`;
+        // When clicked, pop the squircle (no auto-pop and clicking empty space does nothing)
+        squircle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          popSquircle(squircle);
+        });
+        gameArea.appendChild(squircle);
+      }
+
+      // When a squircle is popped, play sound and create explosion letters
+      function popSquircle(squircle) {
+        if (!squircle.classList.contains("popped")) {
+          squircle.classList.add("popped");
+          // Get bounding rectangle and compute center position
+          const rect = squircle.getBoundingClientRect();
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
-          const size = rect.width;
-
-          bubble.classList.add("pop");
+          const size = parseInt(squircle.dataset.size, 10);
+          // Play pop sound
           popSound.currentTime = 0;
           popSound.play();
-          createParticles(centerX, centerY, Math.floor(random(8, 14)));
-          showPopupText(centerX, rect.top, size);
+          // Create explosion letters from the squircle’s location
+          createExplosionText(centerX, centerY, size);
+          // Animate the squircle (scale up and fade out)
+          squircle.style.transform = "scale(1.5)";
+          squircle.style.opacity = 0;
+          // Remove squircle after the animation finishes
           setTimeout(() => {
-            bubble.remove();
+            squircle.remove();
           }, 200);
         }
       }
 
-      // Spawning configuration
-      const spawnInterval = 300; // spawn every 300ms
-      const bubblesPerInterval = 5; // spawn 5 balloons per interval
-      const maxBubbles = 100; // when 100 balloons are on screen, stop spawning
+      // Create three explosion letters ("P", "O", "P") that burst outward with rotation
+      function createExplosionText(x, y, size) {
+        // Define the letters and their explosion angles (in degrees)
+        const letters = [
+          { char: "P", angle: -90 },
+          { char: "O", angle: -90 + 120 },
+          { char: "P", angle: -90 + 240 },
+        ];
+        letters.forEach((letterData) => {
+          const letterElem = document.createElement("span");
+          letterElem.className = "letter";
+          letterElem.textContent = letterData.char;
+          // Set font size relative to the squircle's size (e.g., half of its size)
+          const fontSize = Math.floor(size * 0.5);
+          letterElem.style.fontSize = fontSize + "px";
+          // Position the letter at the explosion origin (center the letter)
+          letterElem.style.left = x - fontSize / 2 + "px";
+          letterElem.style.top = y - fontSize / 2 + "px";
+          // Calculate explosion distance (random between 50 and 100px)
+          const distance = Math.random() * 50 + 50;
+          // Convert the angle to radians
+          const rad = letterData.angle * (Math.PI / 180);
+          const dx = Math.cos(rad) * distance;
+          const dy = Math.sin(rad) * distance;
+          // Set CSS variables for use in the keyframes
+          letterElem.style.setProperty("--dx", dx + "px");
+          letterElem.style.setProperty("--dy", dy + "px");
+          gameArea.appendChild(letterElem);
+          // Remove the letter after animation completes
+          letterElem.addEventListener("animationend", () => {
+            letterElem.remove();
+          });
+        });
+      }
 
-      // Start spawning balloons automatically
-      const spawner = setInterval(() => {
-        // Only spawn if there are fewer than maxBubbles on screen
-        const currentBubbles = gameArea.querySelectorAll(".bubble").length;
-        if (currentBubbles >= maxBubbles) {
-          clearInterval(spawner);
-          return;
-        }
-        for (let i = 0; i < bubblesPerInterval; i++) {
-          // Random position anywhere on screen
-          const x = random(0, window.innerWidth);
-          const y = random(0, window.innerHeight);
-          createBubble(x, y);
-        }
-      }, spawnInterval);
+      // Update accent color of all squircles based on currentHue and their size
+      function updateSquircleColors() {
+        const squircles = document.querySelectorAll(".squircle");
+        squircles.forEach((s) => {
+          const size = parseInt(s.dataset.size, 10);
+          const lightness = computeLightness(size);
+          s.style.backgroundColor = `hsl(${currentHue}, 80%, ${lightness}%)`;
+        });
+      }
 
-      // Note: Clicking on empty space does nothing in this version.
+      // Set up the color slider event to change the hue
+      const colorSlider = document.getElementById("colorSlider");
+      colorSlider.addEventListener("input", (e) => {
+        currentHue = e.target.value;
+        updateSquircleColors();
+      });
+
+      // Rebuild grid on window resize
+      window.addEventListener("resize", createGrid);
+
+      // Initial grid creation
+      createGrid();
     </script>
   </body>
 </html>
