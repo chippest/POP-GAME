@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Squircle Aimbot Pop Game - Extended</title>
+    <title>Squircle Aimbot Pop Game - Extended with Random Pop Sounds</title>
     <style>
       /* Global Styles */
       body {
@@ -87,11 +87,6 @@
     <div id="sliderContainer">
       <input type="range" id="colorSlider" min="0" max="360" value="200" />
     </div>
-    <!-- Audio for pop sound effect -->
-    <audio
-      id="popSound"
-      src="https://freesound.org/data/previews/341/341695_3248244-lq.mp3"
-    ></audio>
     <script>
       // Global configuration variables
       let currentHue = 200; // initial hue from slider
@@ -99,8 +94,13 @@
       const maxSize = 100;
       const gridSpacing = 80; // dense grid spacing
       const gameArea = document.getElementById("gameArea");
-      const popSound = document.getElementById("popSound");
-      popSound.volume = 0.5;
+
+      // Array of pop sound filenames (files should be in the same directory)
+      const popSoundFiles = [
+        "pop-94319.mp3",
+        "pop-39222.mp3",
+        "pop-312576.mp3",
+      ];
 
       // For handling multi-target highlighting
       let highlightCount = 1; // starts with one target
@@ -160,6 +160,15 @@
         }
       }
 
+      // Play a random pop sound from the array
+      function playRandomPopSound() {
+        const file =
+          popSoundFiles[Math.floor(Math.random() * popSoundFiles.length)];
+        const audio = new Audio(file);
+        audio.volume = 0.5;
+        audio.play();
+      }
+
       // Pop a squircle (if not already popped)
       function popSquircle(squircle) {
         if (!squircle.classList.contains("popped")) {
@@ -168,8 +177,7 @@
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
           const size = parseInt(squircle.dataset.size, 10);
-          popSound.currentTime = 0;
-          popSound.play();
+          playRandomPopSound();
           createExplosionText(centerX, centerY, size);
           squircle.style.transform = "scale(1.5)";
           squircle.style.opacity = 0;
@@ -241,7 +249,6 @@
 
       // Create or update the highlighter elements to match currentHighlighted squircles
       function updateHighlighterElements() {
-        // Ensure there are enough highlighter elements
         const container = document.getElementById("highlighterContainer");
         while (highlighters.length < currentHighlighted.length) {
           const hl = document.createElement("div");
@@ -249,12 +256,10 @@
           highlighters.push(hl);
           container.appendChild(hl);
         }
-        // If we have extra highlighters, remove them
         while (highlighters.length > currentHighlighted.length) {
           const hl = highlighters.pop();
           if (hl.parentElement) hl.remove();
         }
-        // Position each highlighter over its corresponding squircle
         currentHighlighted.forEach((sq, index) => {
           const rect = sq.getBoundingClientRect();
           const hl = highlighters[index];
@@ -271,7 +276,6 @@
         if (popInterval === null) {
           popInterval = setInterval(() => {
             currentHighlighted.forEach((sq) => popSquircle(sq));
-            // After popping, update highlights (some squircles may have been removed)
             updateHighlights(lastMouseX, lastMouseY);
           }, 150);
         }
@@ -301,7 +305,6 @@
 
       // Global click (if not holding down) pops highlighted squircles once
       document.addEventListener("click", (e) => {
-        // Only trigger if not already handled by mousedown continuous pop
         if (!popInterval) {
           currentHighlighted.forEach((sq) => popSquircle(sq));
         }
@@ -311,13 +314,10 @@
       document.addEventListener(
         "wheel",
         (e) => {
-          // Prevent page scrolling
           e.preventDefault();
           if (e.deltaY < 0) {
-            // Scrolling up: increase targets
             highlightCount = Math.min(maxHighlightCount, highlightCount + 1);
           } else {
-            // Scrolling down: decrease targets (min 1)
             highlightCount = Math.max(1, highlightCount - 1);
           }
           updateHighlights(lastMouseX, lastMouseY);
